@@ -46,6 +46,8 @@ def compute_uncertainty(ds,
     z = ds.sample_factors(1, s)[0]
     results = np.zeros((num_factors + 1, img_size, img_size))
     for i in range(num_factors + 1):
-        indices = (z[j] if j in order[:i] else slice(None) for j in range(num_factors))
-        selected_images = images[indices]
+        indices = tuple(z[j] if j in order[:i] else slice(None) for j in range(num_factors))
+        selected_images = images[indices].reshape([-1]+list(ds.data_shape))
+        selected_images = selected_images.transpose(0, 3, 1, 2)
         results[i] = entropy_func(selected_images)
+    return results
