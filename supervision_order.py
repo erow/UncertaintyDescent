@@ -39,8 +39,8 @@ class Supervision(Regularizer):
         self.beta = beta
         self.steps = steps
 
-        mean = torch.tensor([np.mean(range(i)) for i in data.factors_num_values])
-        std = torch.tensor([np.std(range(i)) for i in data.factors_num_values])
+        mean = torch.tensor([np.mean(range(i)) for i in data.factors_num_values]).float()
+        std = torch.tensor([np.std(range(i)) for i in data.factors_num_values]).float()
         self.register_buffer('mean', mean)
         self.register_buffer('std', std)
         print(self.mean,self.std)
@@ -83,8 +83,9 @@ from itertools import permutations
 for order in permutations(range(data.num_factors)):
     order_binding = [f'supervision.order={order[:data.num_factors - 1]}']
     try:
+        gin.parse_config(gin_bindings + order_binding)
         logger = WandbLogger()
-        pl_model = Train()
+        pl_model = Train(dir='tmp')
         trainer = pl.Trainer(logger,
                              progress_bar_refresh_rate=500,  # disable progress bar
                              max_steps=pl_model.training_steps,
@@ -92,7 +93,7 @@ for order in permutations(range(data.num_factors)):
                              gpus=1,)
         trainer.fit(pl_model)
         pl_model.save_model('model.pt', 'tmp')
-    except:
-        pass
+    except Exception as e:
+        print(e)
     finally:
         wandb.join()
