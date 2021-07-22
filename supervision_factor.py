@@ -8,7 +8,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 os.environ['WANDB_ENTITY'] = 'dlib'
 os.environ['WANDB_PROJECT'] = 'uncertainty'
-os.environ['WANDB_TAGS'] = 'supervision'
+os.environ['WANDB_TAGS'] = 'supervision_factor'
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import gin
@@ -33,9 +33,9 @@ data = get_named_ground_truth_data(args.dataset)
 class Supervision(Regularizer):
     """AnnealedVAE model."""
 
-    def __init__(self, order=gin.REQUIRED, beta=1, steps=1000):
+    def __init__(self, factor=gin.REQUIRED, beta=1, steps=500):
         super().__init__()
-        self.order = order
+        self.factor = factor
         self.beta = beta
         self.steps = steps
 
@@ -46,13 +46,13 @@ class Supervision(Regularizer):
         print(self.mean,self.std)
 
     def forward(self, data_batch, model, kl, z_mean, z_logvar, z_sampled):
+        if model.global_step == self.steps:
+            pl_model.save_model('model_500.pt','tmp')
 
-        stage = (model.global_step // self.steps)
-        if stage < len(self.order):
-
+        if model.global_step < self.steps:
             _, labels = data_batch
             factors = (labels - self.mean) / self.std
-            l_sup = F.mse_loss(z_sampled[:, stage], factors[:, self.order[stage]])
+            l_sup = F.mse_loss(z_sampled[:, 0], factors[:, self.factor])
             model.summary['supervision'] = l_sup.item()
             return l_sup * self.beta
         else:
@@ -68,11 +68,14 @@ gin_bindings = ['vae.beta=6',
                 'reconstruction_loss.loss_fn = @bernoulli_loss',
                 f"train.dataset='{args.dataset}'",
                 f"dataset.name='{args.dataset}'",
-                'train.training_steps=5000',
-                'train.eval_callbacks=[@eval_mig]',
                 f'train.random_seed={args.seed}',
+                'train.training_steps=1000',
                 'train.batch_size=256',
-                'eval_mig.evaluation_steps=50',
+                'train.eval_callbacks=[@eval_mig,@eval_cmi,@eval_decomposition]',
+                'eval_mig.evaluation_steps=100',
+                'eval_cmi.evaluation_steps=100',
+                'eval_decomposition.evaluation_steps=100',
+                'supervision.steps=500',
                 'discretizer.discretizer_fn = @histogram_discretizer',
                 'discretizer.num_bins = 20',
                 'mig.num_train = 10000'
@@ -80,8 +83,8 @@ gin_bindings = ['vae.beta=6',
 
 from itertools import permutations
 
-for order in permutations(range(data.num_factors)):
-    order_binding = [f'supervision.order={order[:data.num_factors - 1]}']
+for factor in (range(data.num_factors)):
+    order_binding = [f'supervision.factor={factor}']
     try:
         gin.parse_config(gin_bindings + order_binding)
         logger = WandbLogger()

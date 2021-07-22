@@ -10,15 +10,16 @@ from disentanglement_lib.data.ground_truth import named_data
 from uncertainty_estimation import *
 
 if __name__ == '__main__':
-    for seed in range(3):
-        for ds_name in ['cars3d', 'dsprites_full', 'smallonorb']:
-            ds = named_data.get_named_ground_truth_data(ds_name)
-            for i,order in permutations(range(ds.num_factors)):
-                entropy_func =  BernoulliH if ds_name == "dsprites_full" else GaussianH
+    for ds_name in ['dsprites_full']:
+        ds = named_data.get_named_ground_truth_data(ds_name)
+        for seed in range(3):
+            for i,order in enumerate(permutations(range(ds.num_factors))):
+                entropy_func =  entropy_bernoulli if ds_name == "dsprites_full" else entropy_gaussian
                 Hds = compute_uncertainty(ds,
-                                          GaussianH,
+                                          entropy_gaussian,
                                           order)
                 file_name = f"results/{ds_name}_{order}_{seed}.npy"
+                print(file_name)
                 np.save(file_name, Hds)
 
 
